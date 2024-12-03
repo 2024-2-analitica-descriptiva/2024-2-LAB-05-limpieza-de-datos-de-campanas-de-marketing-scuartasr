@@ -25,69 +25,127 @@ def lectura_comprimido(direccion: str) -> pd.DataFrame:
 
     return df
 
-def base_dividida(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Esta base recibe un marco de datos y selecciona solo algunas
-    columnas de interés, retornando un marco de datos solo con
-    aquellas columnas. Para algunas de esas columnas de interés
-    se realiza un preprocesamiento.
-    """
+# ================================================================
+# ================================================================
+# ================================================================
 
-    ## División uno =============
+def base_dividida(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     columnas_clientes = ['client_id', 'age', 'job', 'marital', 'education',
-                'credit_default', 'mortgage']
-    
-    df_clientes = df[columnas_clientes]
-
-    # Transformaciones
-    df_clientes['job'] = df_clientes['job'].str.replace('.', '')
-    df_clientes['job'] = df_clientes['job'].str.replace('-', '_')
-    
-    df_clientes['education'] = df_clientes['education'].str.replace('.', '_')
-    df_clientes['education'] = df_clientes['education'].replace('unknown', pd.NA)
-
-    df_clientes['credit_default'] = df_clientes['credit_default'].apply(
-        lambda x: 1 if x == 'yes' else 0
-    )
-
-    df_clientes['mortgage'] = df_clientes['mortgage'].apply(
-        lambda x: 1 if x == 'yes' else 0
-    )
-
-    ## División dos =============
+                         'credit_default', 'mortgage']
     columnas_campana = [
         'client_id', 'number_contacts', 'contact_duration',
         'previous_campaign_contacts', 'previous_outcome',
         'campaign_outcome', 'day', 'month'
     ]
+    columnas_economics = ['client_id', 'cons_price_idx', 'euribor_three_months']
 
-    df_campana = df[columnas_campana]
+    # Crear copias explícitas
+    df_clientes = df[columnas_clientes].copy()
+    df_campana = df[columnas_campana].copy()
+    df_economics = df[columnas_economics].copy()
 
-    # Transformaciones
-    df_campana['previous_outcome'] = df_campana['previous_outcome'].apply(
-        lambda x: 1 if x == 'success' else 0
-    )
-    df_campana['campaign_outcome'] = df_campana['campaign_outcome'].apply(
+    # Transformaciones en df_clientes
+    df_clientes.loc[:, 'job'] = df_clientes['job'].str.replace('.', '', regex=False)
+    df_clientes.loc[:, 'job'] = df_clientes['job'].str.replace('-', '_', regex=False)
+
+    df_clientes.loc[:, 'education'] = df_clientes['education'].str.replace('.', '_', regex=False)
+    df_clientes.loc[:, 'education'] = df_clientes['education'].replace('unknown', pd.NA)
+
+    df_clientes.loc[:, 'credit_default'] = df_clientes['credit_default'].apply(
         lambda x: 1 if x == 'yes' else 0
     )
 
+    df_clientes.loc[:, 'mortgage'] = df_clientes['mortgage'].apply(
+        lambda x: 1 if x == 'yes' else 0
+    )
+
+    # Transformaciones en df_campana
     mes_equiv = {
         'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
         'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
         'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12',
     }
-    df_campana['mes_equiv'] = df_campana['month'].str.lower().map(mes_equiv)
-    df_campana['dia_aux'] = df_campana['day'].astype(str).str.zfill(2)
-    df_campana['last_contact_day'] = '2022' + '-' + df_campana['mes_equiv'] + '-' + df_campana['dia_aux']
+
+    df_campana.loc[:, 'previous_outcome'] = df_campana['previous_outcome'].apply(
+        lambda x: 1 if x == 'success' else 0
+    )
+    df_campana.loc[:, 'campaign_outcome'] = df_campana['campaign_outcome'].apply(
+        lambda x: 1 if x == 'yes' else 0
+    )
+
+    df_campana.loc[:, 'mes_equiv'] = df_campana['month'].str.lower().map(mes_equiv)
+    df_campana.loc[:, 'dia_aux'] = df_campana['day'].astype(str).str.zfill(2)
+    df_campana.loc[:, 'last_contact_date'] = (
+        '2022' + '-' + df_campana['mes_equiv'] + '-' + df_campana['dia_aux']
+    )
+
     columnas_campana_upd = [
         'client_id', 'number_contacts', 'contact_duration',
         'previous_campaign_contacts', 'previous_outcome',
-        'campaign_outcome', 'last_contact_day'
+        'campaign_outcome', 'last_contact_date'
     ]
 
+    return df_clientes, df_campana[columnas_campana_upd].copy(), df_economics
 
-    return df_clientes, df_campana[columnas_campana_upd]
 
+# ================================================================
+# ================================================================
+# ================================================================
+
+def lista_archivos(ruta_carpeta: str) -> list:
+    """
+    Esta función retorna una lista con el nombre de todos los archivos
+    que se ubican dentro de una carpeta
+    """
+
+    lista_archivos = os.listdir(ruta_carpeta)
+
+    lista_archivos = [ruta_carpeta + '/' + x for x in lista_archivos]
+
+    return sorted(lista_archivos)
+
+# ================================================================
+# ================================================================
+# ================================================================
+
+def unificacion(lista: str):
+    """
+    Esta función recibe una lista de varios archivos y los unifica
+    en tres marcos de datos
+    """
+
+    df = lectura_comprimido(lista[0])
+
+    for archivo in lista[1:]:
+        df_nuevo = lectura_comprimido(archivo)
+        df = pd.concat([df, df_nuevo], axis = 0)
+
+    return df
+
+# ================================================================
+# ================================================================
+# ================================================================
+
+def guardado(df: pd.DataFrame, carpeta: str, archivo: str):
+    """
+    Esta carpeta guarda un elemento entregado dentro de un carpeta
+    con cierto nombre de archivo.
+    """
+
+    if not os.path.exists(carpeta):
+        os.makedirs(carpeta)
+
+    ruta_archivo = os.path.join(carpeta, archivo)
+
+    df.to_csv(ruta_archivo, index = False)
+
+    print('Se ha guardado en ' + ruta_archivo)
+
+
+
+# ================================================================
+# ================================================================
+# ================================================================
 
 def clean_campaign_data():
     """
@@ -130,14 +188,24 @@ def clean_campaign_data():
     - const_price_idx
     - eurobor_three_months
     """
+    # Carpeta donde se alojan todos los datos
+    carpeta = lista_archivos('./files/input')
 
-    direccion = './files/input/bank-marketing-campaing-7.csv.zip'
-    df0 = lectura_comprimido(direccion)
-    df0, df1 = base_dividida(df0)
+    # Lectura de todos los datos y unificación en un solo
+    # marco de datos
+    df = unificacion(carpeta)
 
-    return df0, df1
+    # División en tres marcos de datos
+    df0, df1, df2 = base_dividida(df)
+
+    # Carpeta donde se van a alojar los datos
+    carpeta_out = './files/output'
+
+    # Guardado de cada uno de los datos
+    df0 = guardado(df0, carpeta_out, 'client.csv')
+    df1 = guardado(df1, carpeta_out, 'campaign.csv')
+    df2 = guardado(df2, carpeta_out, 'economics.csv')
 
 
 if __name__ == "__main__":
-    df0, df1 = clean_campaign_data()
-    print(df1.head())
+    clean_campaign_data()
